@@ -15,7 +15,6 @@ include_directories(/Users/Ruud/esp32-homekit/esp-homekit-demo/components/homeki
 
 add_executable(led
         main/main.c
-        main/dht11.c
-        main/dht11.h
+        main/DHT22.c
         Makefile
         )

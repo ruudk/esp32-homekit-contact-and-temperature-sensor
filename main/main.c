@@ -12,7 +12,7 @@
 #include <homekit/characteristics.h>
 #include <components/homekit/include/homekit/types.h>
 #include "wifi.h"
-#include "dht11.h"
+#include "DHT22.h"
 
 #define GPIO_IDENTITY_LED GPIO_NUM_18
 #define GPIO_ACTION_LED GPIO_NUM_19
@@ -28,6 +28,7 @@ static bool RESET_PRESSED = false;
 
 static homekit_value_t sensor_state_value = HOMEKIT_UINT8(0);
 static homekit_value_t temperature_value = HOMEKIT_FLOAT(0);
+static homekit_value_t humidity_value = HOMEKIT_FLOAT(0);
 static homekit_value_t status_active_value = HOMEKIT_BOOL(false);
 
 void on_wifi_ready();
@@ -83,6 +84,11 @@ homekit_value_t temperature_getter() {
 
     return temperature_value;
 }
+homekit_value_t humidity_getter() {
+    printf("humidity_getter\n");
+
+    return humidity_value;
+}
 homekit_value_t status_active_getter() {
     printf("status_active_getter\n");
 
@@ -99,6 +105,7 @@ static void IRAM_ATTR gpio_isr_handler(void* arg)
 
 homekit_characteristic_t sensor_state = HOMEKIT_CHARACTERISTIC_(CONTACT_SENSOR_STATE, 0, .getter=sensor_state_getter);
 homekit_characteristic_t current_temperature = HOMEKIT_CHARACTERISTIC_(CURRENT_TEMPERATURE, 0, .getter=temperature_getter);
+homekit_characteristic_t current_humidity = HOMEKIT_CHARACTERISTIC_(CURRENT_RELATIVE_HUMIDITY, 0, .getter=humidity_getter);
 homekit_characteristic_t status_active = HOMEKIT_CHARACTERISTIC_(STATUS_ACTIVE, 0, .getter=status_active_getter);
 
 static void gpio_watcher(void* arg)
@@ -224,6 +231,24 @@ homekit_accessory_t *accessories[] = {
               }),
               NULL
         }),
+        HOMEKIT_ACCESSORY(.id=3, .category=homekit_accessory_category_sensor, .services=(homekit_service_t*[]){
+                HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]){
+                HOMEKIT_CHARACTERISTIC(NAME, "Humidity Sensor"),
+                HOMEKIT_CHARACTERISTIC(MANUFACTURER, "Ruud"),
+                HOMEKIT_CHARACTERISTIC(SERIAL_NUMBER, "1337"),
+                HOMEKIT_CHARACTERISTIC(MODEL, "MyLED"),
+                HOMEKIT_CHARACTERISTIC(FIRMWARE_REVISION, "0.1"),
+                HOMEKIT_CHARACTERISTIC(IDENTIFY, led_identify),
+                NULL
+                }),
+              HOMEKIT_SERVICE(HUMIDITY_SENSOR, .primary=true, .characteristics=(homekit_characteristic_t*[]){
+                      HOMEKIT_CHARACTERISTIC(NAME, "Humidity Sensor"),
+                      &current_humidity,
+                      &status_active,
+                      NULL
+              }),
+              NULL
+        }),
         NULL
 };
 
@@ -236,38 +261,63 @@ void on_wifi_ready() {
     homekit_server_init(&config);
 }
 
-
 void DHT_task(void *pvParameter)
 {
-    printf("Waiting 1 second to start DHT measurement...\n");
-    vTaskDelay(1000 / portTICK_RATE_MS);
+    vTaskDelay( 1000 / portTICK_RATE_MS );
 
+    setDHTgpio(GPIO_DHT);
     printf("Starting DHT measurement!\n");
+
+    float temp;
+    float humidity;
+
     while(1)
     {
-        int temp = getTemp();
+        printf("=== Reading DHT ===\n" );
+        int response = readDHT();
 
-        if (temp == DHT_CHECKSUM_ERROR) {
-            printf("Checksum error, skipping\n");
+        switch(response) {
+            case DHT_TIMEOUT_ERROR :
+                printf("Timeout error, skipping\n");
 
-            status_active_value.bool_value = false;
-            homekit_characteristic_notify(&status_active, status_active_value);
-        } else if (temp == DHT_TIMEOUT_ERROR) {
-            printf("Timeout error, skipping\n");
+                status_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_active, status_active_value);
 
-            status_active_value.bool_value = false;
-            homekit_characteristic_notify(&status_active, status_active_value);
-        } else {
-            printf("Temperature reading %d\n",temp);
+                break;
 
-            temperature_value.float_value = (float) temp;
-            homekit_characteristic_notify(&current_temperature, temperature_value);
+            case DHT_CHECKSUM_ERROR:
+                printf("Checksum error, skipping\n");
 
-            status_active_value.bool_value = true;
-            homekit_characteristic_notify(&status_active, status_active_value);
+                status_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_active, status_active_value);
+
+                break;
+
+            case DHT_OK:
+                temp = getTemperature();
+                humidity = getHumidity();
+                printf( "Hum %.1f\n", humidity );
+                printf( "Tmp %.1f\n", temp );
+
+                temperature_value.float_value = temp;
+                homekit_characteristic_notify(&current_temperature, temperature_value);
+
+                humidity_value.float_value = humidity;
+                homekit_characteristic_notify(&current_humidity, humidity_value);
+
+                status_active_value.bool_value = true;
+                homekit_characteristic_notify(&status_active, status_active_value);
+
+                break;
+
+            default :
+                printf("Unknown error, skipping\n");
+
+                status_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_active, status_active_value);
         }
 
-        vTaskDelay(5000 / portTICK_RATE_MS);
+        vTaskDelay( 3000 / portTICK_RATE_MS );
     }
 }
 

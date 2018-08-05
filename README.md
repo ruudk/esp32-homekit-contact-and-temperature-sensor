@@ -34,7 +34,6 @@ make all
 ```
 8. Upload firmware to ESP32:
 ```shell
-    make flash
-    make monitor
+    make flash monitor
 ```
 To exit the monitor, simply press `CONTROL + ]`
