@@ -281,7 +281,7 @@ void DHT_task(void *pvParameter)
 
     while(1)
     {
-        printf("=== Reading DHT ===\n" );
+        //printf("=== Reading DHT ===\n" );
         int response = readDHT();
 
         switch(response) {
@@ -310,8 +310,8 @@ void DHT_task(void *pvParameter)
             case DHT_OK:
                 temp = getTemperature();
                 humidity = getHumidity();
-                printf( "Hum %.1f\n", humidity );
-                printf( "Tmp %.1f\n", temp );
+                //printf( "Hum %.1f\n", humidity );
+                //printf( "Tmp %.1f\n", temp );
 
                 temperature_value.float_value = temp;
                 homekit_characteristic_notify(&current_temperature, temperature_value);
