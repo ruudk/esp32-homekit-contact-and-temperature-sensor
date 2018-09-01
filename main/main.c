@@ -29,7 +29,8 @@ static bool RESET_PRESSED = false;
 static homekit_value_t sensor_state_value = HOMEKIT_UINT8(0);
 static homekit_value_t temperature_value = HOMEKIT_FLOAT(0);
 static homekit_value_t humidity_value = HOMEKIT_FLOAT(0);
-static homekit_value_t status_active_value = HOMEKIT_BOOL(false);
+static homekit_value_t status_temperature_active_value = HOMEKIT_BOOL(false);
+static homekit_value_t status_humidity_active_value = HOMEKIT_BOOL(false);
 
 void on_wifi_ready();
 
@@ -89,10 +90,16 @@ homekit_value_t humidity_getter() {
 
     return humidity_value;
 }
-homekit_value_t status_active_getter() {
-    printf("status_active_getter\n");
+homekit_value_t status_temperature_active_getter() {
+    printf("status_temperature_active_getter\n");
 
-    return status_active_value;
+    return status_temperature_active_value;
+}
+
+homekit_value_t status_humidity_active_getter() {
+    printf("status_humidity_active_getter\n");
+
+    return status_humidity_active_value;
 }
 
 static xQueueHandle gpio_evt_queue = NULL;
@@ -106,7 +113,8 @@ static void IRAM_ATTR gpio_isr_handler(void* arg)
 homekit_characteristic_t sensor_state = HOMEKIT_CHARACTERISTIC_(CONTACT_SENSOR_STATE, 0, .getter=sensor_state_getter);
 homekit_characteristic_t current_temperature = HOMEKIT_CHARACTERISTIC_(CURRENT_TEMPERATURE, 0, .getter=temperature_getter);
 homekit_characteristic_t current_humidity = HOMEKIT_CHARACTERISTIC_(CURRENT_RELATIVE_HUMIDITY, 0, .getter=humidity_getter);
-homekit_characteristic_t status_active = HOMEKIT_CHARACTERISTIC_(STATUS_ACTIVE, 0, .getter=status_active_getter);
+homekit_characteristic_t status_temperature_active = HOMEKIT_CHARACTERISTIC_(STATUS_ACTIVE, 0, .getter=status_temperature_active_getter);
+homekit_characteristic_t status_humidity_active = HOMEKIT_CHARACTERISTIC_(STATUS_ACTIVE, 0, .getter=status_humidity_active_getter);
 
 static void gpio_watcher(void* arg)
 {
@@ -226,7 +234,7 @@ homekit_accessory_t *accessories[] = {
               HOMEKIT_SERVICE(TEMPERATURE_SENSOR, .primary=true, .characteristics=(homekit_characteristic_t*[]){
                       HOMEKIT_CHARACTERISTIC(NAME, "Temperature Sensor"),
                       &current_temperature,
-                      &status_active,
+                      &status_temperature_active,
                       NULL
               }),
               NULL
@@ -244,7 +252,7 @@ homekit_accessory_t *accessories[] = {
               HOMEKIT_SERVICE(HUMIDITY_SENSOR, .primary=true, .characteristics=(homekit_characteristic_t*[]){
                       HOMEKIT_CHARACTERISTIC(NAME, "Humidity Sensor"),
                       &current_humidity,
-                      &status_active,
+                      &status_humidity_active,
                       NULL
               }),
               NULL
@@ -280,16 +288,22 @@ void DHT_task(void *pvParameter)
             case DHT_TIMEOUT_ERROR :
                 printf("Timeout error, skipping\n");
 
-                status_active_value.bool_value = false;
-                homekit_characteristic_notify(&status_active, status_active_value);
+                status_temperature_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_temperature_active, status_temperature_active_value);
+
+                status_humidity_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_humidity_active, status_humidity_active_value);
 
                 break;
 
             case DHT_CHECKSUM_ERROR:
                 printf("Checksum error, skipping\n");
 
-                status_active_value.bool_value = false;
-                homekit_characteristic_notify(&status_active, status_active_value);
+                status_temperature_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_temperature_active, status_temperature_active_value);
+
+                status_humidity_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_humidity_active, status_humidity_active_value);
 
                 break;
 
@@ -305,16 +319,23 @@ void DHT_task(void *pvParameter)
                 humidity_value.float_value = humidity;
                 homekit_characteristic_notify(&current_humidity, humidity_value);
 
-                status_active_value.bool_value = true;
-                homekit_characteristic_notify(&status_active, status_active_value);
+                status_temperature_active_value.bool_value = true;
+                homekit_characteristic_notify(&status_temperature_active, status_temperature_active_value);
+
+                status_humidity_active_value.bool_value = true;
+                homekit_characteristic_notify(&status_humidity_active, status_humidity_active_value);
 
                 break;
 
             default :
                 printf("Unknown error, skipping\n");
 
-                status_active_value.bool_value = false;
-                homekit_characteristic_notify(&status_active, status_active_value);
+                status_temperature_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_temperature_active, status_temperature_active_value);
+
+                status_humidity_active_value.bool_value = false;
+                homekit_characteristic_notify(&status_humidity_active, status_humidity_active_value);
+
         }
 
         vTaskDelay( 3000 / portTICK_RATE_MS );
