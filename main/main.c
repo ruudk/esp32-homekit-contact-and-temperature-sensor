@@ -122,7 +122,7 @@ static void gpio_watcher(void* arg)
     for(;;) {
         if(xQueueReceive(gpio_evt_queue, &io_num, portMAX_DELAY)) {
             if (io_num == GPIO_RESET_BUTTON) {
-                if (gpio_get_level(io_num) == 1) {
+                if (gpio_get_level(io_num) == 0) {
                     if (RESET_PRESSED == false) {
                         RESET_PRESSED = true;
                         printf("Resetting Homekit...\n");
